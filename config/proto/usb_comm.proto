@@ -21,6 +21,7 @@ enum Action {
 	RGB_SET_STATE = 8;
 	RGB_GET_INDICATOR = 10;
 	RGB_SET_INDICATOR = 11;
+	RGB_SET_DIRECT = 12;
 	EINK_SET_IMAGE = 7;
 }
 
@@ -37,6 +38,7 @@ message MessageH2D
 		RgbControl rgb_control = 4;
 		RgbState rgb_state = 7;
 		RgbIndicator rgb_indicator = 8;
+		RgbDirect rgb_direct = 9;
 		EinkImage eink_image = 5;
 	}
 }
@@ -53,6 +55,7 @@ message MessageD2H
 		KnobConfig.Pref knob_pref = 8;
 		RgbState rgb_state = 6;
 		RgbIndicator rgb_indicator = 9;
+		RgbDirect rgb_direct = 10;
 		EinkImage eink_image = 7;
 	}
 }
@@ -78,6 +81,7 @@ message Version
 		optional bool knob_prefs = 4;
 		optional bool knob_profile_switch = 7;
 		optional bool knob_spring_report = 8;
+		optional bool rgb_direct = 9;
 	}
 }
 
@@ -173,6 +177,21 @@ message RgbIndicator
 	optional bool enable = 1;
 	optional uint32 brightness_active = 2;
 	optional uint32 brightness_inactive = 3;
+}
+
+message RgbDirect
+{
+	required Command command = 1;
+	optional uint32 start = 2;  // starting logical LED index for `pixels`
+	optional bytes pixels = 3;  // packed RGB, 3 bytes (R,G,B) per LED, in logical layout order
+	optional bool flush = 4;    // push the written pixels to the LED hardware
+	optional uint32 count = 5;  // [response] number of addressable LEDs (logical layout length)
+
+	enum Command {
+		ENTER = 0;   // take over the strip from the effect engine
+		UPDATE = 1;  // write `pixels` starting at `start`; apply if `flush`
+		EXIT = 2;    // release the strip back to the effect engine
+	}
 }
 
 message EinkImage

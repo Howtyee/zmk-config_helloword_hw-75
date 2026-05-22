@@ -6,8 +6,17 @@
 #include "handler.h"
 #include "usb_comm.pb.h"
 
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/led_strip.h>
+#include <zephyr/drivers/led_strip_remap.h>
+
 #include <zmk/rgb_underglow.h>
 #include <app/indicator.h>
+
+#define STRIP_CHOSEN DT_CHOSEN(zmk_underglow)
+
+static const struct device *const rgb_strip = DEVICE_DT_GET(STRIP_CHOSEN);
 
 static bool handle_rgb_get_state(const usb_comm_MessageH2D *h2d, usb_comm_MessageD2H *d2h,
 				 const void *bytes, uint32_t bytes_len);
@@ -155,3 +164,52 @@ static bool handle_rgb_set_indicator(const usb_comm_MessageH2D *h2d, usb_comm_Me
 
 USB_COMM_HANDLER_DEFINE(usb_comm_Action_RGB_SET_INDICATOR, usb_comm_MessageD2H_rgb_indicator_tag,
 			handle_rgb_set_indicator);
+
+static bool handle_rgb_set_direct(const usb_comm_MessageH2D *h2d, usb_comm_MessageD2H *d2h,
+				  const void *bytes, uint32_t bytes_len)
+{
+	const usb_comm_RgbDirect *req = &h2d->payload.rgb_direct;
+	usb_comm_RgbDirect *res = &d2h->payload.rgb_direct;
+
+	if (!device_is_ready(rgb_strip)) {
+		return false;
+	}
+
+	switch (req->command) {
+	case usb_comm_RgbDirect_Command_ENTER:
+		led_strip_remap_set_external(rgb_strip, true);
+		break;
+
+	case usb_comm_RgbDirect_Command_UPDATE: {
+		uint32_t start = req->has_start ? req->start : 0;
+		uint32_t num = bytes_len / 3;
+		bool flush = req->has_flush && req->flush;
+		if (num > 0) {
+			led_strip_remap_set_pixels(rgb_strip, start, bytes, num, flush);
+		}
+		break;
+	}
+
+	case usb_comm_RgbDirect_Command_EXIT: {
+		led_strip_remap_set_external(rgb_strip, false);
+		/* Nudge the effect engine to repaint its current state immediately. */
+		bool on = false;
+		if (zmk_rgb_underglow_get_state(&on) == 0) {
+			if (on) {
+				zmk_rgb_underglow_on();
+			} else {
+				zmk_rgb_underglow_off();
+			}
+		}
+		break;
+	}
+	}
+
+	res->command = req->command;
+	res->count = led_strip_remap_get_count(rgb_strip);
+	res->has_count = true;
+	return true;
+}
+
+USB_COMM_HANDLER_DEFINE(usb_comm_Action_RGB_SET_DIRECT, usb_comm_MessageD2H_rgb_direct_tag,
+			handle_rgb_set_direct);

@@ -29,6 +29,7 @@ struct led_strip_remap_data {
 	struct led_rgb *pixels;
 	struct led_rgb *output;
 	struct led_strip_remap_indicator_state *indicators;
+	bool external;
 	struct k_mutex lock;
 };
 
@@ -82,6 +83,11 @@ static int led_strip_remap_update_rgb(const struct device *dev, struct led_rgb *
 {
 	struct led_strip_remap_data *data = dev->data;
 	const struct led_strip_remap_config *config = dev->config;
+
+	/* An external controller owns the strip; drop effect-engine writes. */
+	if (data->external) {
+		return 0;
+	}
 
 	if (num_pixels > config->map_len) {
 		num_pixels = config->map_len;
@@ -154,6 +160,51 @@ int led_strip_remap_clear(const struct device *dev, const char *label)
 	k_mutex_unlock(&data->lock);
 
 	return led_strip_remap_apply(dev);
+}
+
+int led_strip_remap_get_count(const struct device *dev)
+{
+	const struct led_strip_remap_config *config = dev->config;
+	return config->map_len;
+}
+
+int led_strip_remap_set_external(const struct device *dev, bool external)
+{
+	struct led_strip_remap_data *data = dev->data;
+
+	k_mutex_lock(&data->lock, K_FOREVER);
+	data->external = external;
+	k_mutex_unlock(&data->lock);
+
+	return 0;
+}
+
+int led_strip_remap_set_pixels(const struct device *dev, uint32_t start, const uint8_t *rgb,
+			       uint32_t num_pixels, bool apply)
+{
+	struct led_strip_remap_data *data = dev->data;
+	const struct led_strip_remap_config *config = dev->config;
+
+	if (start >= config->map_len) {
+		return -EINVAL;
+	}
+
+	if (start + num_pixels > config->map_len) {
+		num_pixels = config->map_len - start;
+	}
+
+	k_mutex_lock(&data->lock, K_FOREVER);
+
+	for (uint32_t i = 0; i < num_pixels; i++) {
+		struct led_rgb *px = &data->pixels[config->map[start + i]];
+		px->r = rgb[i * 3 + 0];
+		px->g = rgb[i * 3 + 1];
+		px->b = rgb[i * 3 + 2];
+	}
+
+	k_mutex_unlock(&data->lock);
+
+	return apply ? led_strip_remap_apply(dev) : 0;
 }
 
 static int led_strip_remap_init(const struct device *dev)

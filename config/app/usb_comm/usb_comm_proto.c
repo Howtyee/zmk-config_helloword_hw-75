@@ -62,6 +62,9 @@ static bool h2d_callback(pb_istream_t *stream, const pb_field_t *field, void **a
 	if (field->tag == usb_comm_MessageH2D_eink_image_tag) {
 		usb_comm_EinkImage *eink_image = field->pData;
 		eink_image->bits.funcs.decode = read_bytes_field;
+	} else if (field->tag == usb_comm_MessageH2D_rgb_direct_tag) {
+		usb_comm_RgbDirect *rgb_direct = field->pData;
+		rgb_direct->pixels.funcs.decode = read_bytes_field;
 	}
 	return true;
 }
@@ -79,6 +82,7 @@ static void usb_comm_handle_message()
 	usb_comm_MessageD2H d2h = usb_comm_MessageD2H_init_zero;
 
 #if CONFIG_HW75_USB_COMM_MAX_BYTES_FIELD_SIZE
+	bytes_field_len = 0;
 	h2d.cb_payload.funcs.decode = h2d_callback;
 #endif
 

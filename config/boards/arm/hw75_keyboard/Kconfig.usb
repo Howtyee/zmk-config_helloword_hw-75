@@ -13,6 +13,12 @@ config HW75_USB_COMM_MAX_TX_MESSAGE_SIZE
 
 config HW75_USB_COMM_MAX_RX_MESSAGE_SIZE
 	int
-	default 64
+	# Large enough to hold one RgbDirect chunk (pixels bytes-field + protobuf overhead).
+	default 256
+
+config HW75_USB_COMM_MAX_BYTES_FIELD_SIZE
+	int
+	# Up to 66 LEDs (66 * 3) of per-key RGB per chunk; a full 101-LED frame is 2 chunks.
+	default 198
 
 endif # HW75_USB_COMM
